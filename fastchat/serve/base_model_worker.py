@@ -34,7 +34,6 @@ class BaseModelWorker:
         model_names: List[str],
         limit_worker_concurrency: int,
         conv_template: str = None,
-        multimodal: bool = False,
     ):
         global logger, worker
 
@@ -47,7 +46,6 @@ class BaseModelWorker:
         self.limit_worker_concurrency = limit_worker_concurrency
         self.conv = self.make_conv_template(conv_template, model_path)
         self.conv.sep_style = int(self.conv.sep_style)
-        self.multimodal = multimodal
         self.tokenizer = None
         self.context_len = None
         self.call_ct = 0
@@ -94,7 +92,6 @@ class BaseModelWorker:
             "worker_name": self.worker_addr,
             "check_heart_beat": True,
             "worker_status": self.get_status(),
-            "multimodal": self.multimodal,
         }
         r = requests.post(url, json=data)
         assert r.status_code == 200
@@ -129,18 +126,18 @@ class BaseModelWorker:
             self.register_to_controller()
 
     def get_queue_length(self):
-        if self.semaphore is None:
+        if (
+            self.semaphore is None
+            or self.semaphore._value is None
+            or self.semaphore._waiters is None
+        ):
             return 0
         else:
-            sempahore_value = (
-                self.semaphore._value
-                if self.semaphore._value is not None
-                else self.limit_worker_concurrency
+            return (
+                self.limit_worker_concurrency
+                - self.semaphore._value
+                + len(self.semaphore._waiters)
             )
-            waiter_count = (
-                0 if self.semaphore._waiters is None else len(self.semaphore._waiters)
-            )
-            return self.limit_worker_concurrency - sempahore_value + waiter_count
 
     def get_status(self):
         return {

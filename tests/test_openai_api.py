@@ -4,32 +4,30 @@ Test the OpenAI compatible server
 Launch:
 python3 launch_openai_api_test_server.py
 """
-import warnings
 
 import openai
+
 from fastchat.utils import run_cmd
 
-
 openai.api_key = "EMPTY"  # Not support yet
-openai.base_url = "http://localhost:8000/v1/"
+openai.api_base = "http://localhost:8000/v1"
 
 
 def test_list_models():
-    model_list = openai.models.list()
-    names = [x.id for x in model_list.data]
+    model_list = openai.Model.list()
+    names = [x["id"] for x in model_list["data"]]
     return names
 
 
 def test_completion(model, logprob):
     prompt = "Once upon a time"
-    completion = openai.completions.create(
+    completion = openai.Completion.create(
         model=model,
         prompt=prompt,
         logprobs=logprob,
         max_tokens=64,
         temperature=0,
     )
-
     print(f"full text: {prompt + completion.choices[0].text}", flush=True)
     if completion.choices[0].logprobs is not None:
         print(
@@ -40,7 +38,7 @@ def test_completion(model, logprob):
 
 def test_completion_stream(model):
     prompt = "Once upon a time"
-    res = openai.completions.create(
+    res = openai.Completion.create(
         model=model,
         prompt=prompt,
         max_tokens=64,
@@ -49,19 +47,19 @@ def test_completion_stream(model):
     )
     print(prompt, end="")
     for chunk in res:
-        content = chunk.choices[0].text
+        content = chunk["choices"][0]["text"]
         print(content, end="", flush=True)
     print()
 
 
 def test_embedding(model):
-    embedding = openai.embeddings.create(model=model, input="Hello world!")
-    print(f"embedding len: {len(embedding.data[0].embedding)}")
-    print(f"embedding value[:5]: {embedding.data[0].embedding[:5]}")
+    embedding = openai.Embedding.create(model=model, input="Hello world!")
+    print(f"embedding len: {len(embedding['data'][0]['embedding'])}")
+    print(f"embedding value[:5]: {embedding['data'][0]['embedding'][:5]}")
 
 
 def test_chat_completion(model):
-    completion = openai.chat.completions.create(
+    completion = openai.ChatCompletion.create(
         model=model,
         messages=[{"role": "user", "content": "Hello! What is your name?"}],
         temperature=0,
@@ -71,16 +69,11 @@ def test_chat_completion(model):
 
 def test_chat_completion_stream(model):
     messages = [{"role": "user", "content": "Hello! What is your name?"}]
-    res = openai.chat.completions.create(
+    res = openai.ChatCompletion.create(
         model=model, messages=messages, stream=True, temperature=0
     )
     for chunk in res:
-        try:
-            content = chunk.choices[0].delta.content
-            if content is None:
-                content = ""
-        except Exception as e:
-            content = chunk.choices[0].delta.get("content", "")
+        content = chunk["choices"][0]["delta"].get("content", "")
         print(content, end="", flush=True)
     print()
 
@@ -142,7 +135,7 @@ if __name__ == "__main__":
         test_chat_completion_stream(model)
         try:
             test_embedding(model)
-        except openai.APIError as e:
+        except openai.error.APIError as e:
             print(f"Embedding error: {e}")
 
     print("===== Test curl =====")

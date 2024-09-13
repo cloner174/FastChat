@@ -2,7 +2,7 @@
 Clean chatbot arena chat log.
 
 Usage:
-python3 clean_chat_data.py
+python3 clean_chat_data.py --mode conv_release
 """
 import argparse
 import datetime
@@ -89,7 +89,7 @@ def clean_chat_data(log_files, action_type):
         if not isinstance(model, str):
             ct_invalid += 1
             continue
-        model = replace_model_name(model, row["tstamp"])
+        model = replace_model_name(model)
 
         try:
             lang_code = detect_language(state["messages"][state["offset"]][1])
