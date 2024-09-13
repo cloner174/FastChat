@@ -309,7 +309,7 @@ def load_model(
         kwargs["torch_dtype"] = dtype
 
     # Load model
-    model, tokenizer = adapter.load_model(model_path,token_value, kwargs)
+    model, tokenizer = adapter.load_model(model_path, kwargs)
 
     if (
         device == "cpu"
