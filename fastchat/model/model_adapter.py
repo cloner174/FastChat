@@ -163,7 +163,7 @@ def raise_warning_for_incompatible_cpu_offloading_configuration(
 
 def load_model(
     model_path: str,
-    device: str = "cuda",
+    device: str = "cpu",
     num_gpus: int = 1,
     max_gpu_memory: Optional[str] = None,
     dtype: Optional[torch.dtype] = None,
@@ -400,12 +400,6 @@ def add_model_args(parser):
         type=str,
         default="lmsys/vicuna-7b-v1.5",
         help="The path to the weights. This can be a local folder or a Hugging Face repo ID.",
-    )
-    parser.add_argument(
-        "--token-value",
-        type=str,
-        default="",
-        help="The API token for Hugging Face!.!",
     )
     parser.add_argument(
         "--revision",
@@ -1421,22 +1415,59 @@ class Llama2Adapter(BaseModelAdapter):
         return get_conv_template("one_shot")
 
 
+
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, AutoModel, AutoModelForSeq2SeqLM
+from .compression import load_compress_model
+
 class MeditronAdapter(BaseModelAdapter):
     """The model adapter for Meditron"""
-    
+
     def match(self, model_path: str):
         return "meditron" in model_path.lower()
-    
-    def load_model(self, model_path: str, token_value: str , from_pretrained_kwargs: dict):
-        from transformers import AutoTokenizer, AutoModelForCausalLM
-        tokenizer = AutoTokenizer.from_pretrained(model_path ,token= token_value)
-        model = AutoModelForCausalLM.from_pretrained(model_path, token= token_value)
+
+    def load_model(self, model_path: str, from_pretrained_kwargs: dict):
+        
+        revision = from_pretrained_kwargs.get("revision", "main")
+        device = from_pretrained_kwargs.get('device', 'cuda')
+        torch_dtype = from_pretrained_kwargs.get('torch_dtype', torch.float16)
+        use_fast = from_pretrained_kwargs.get('use_fast', True)
+        
+        # Load the tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            use_fast=use_fast,
+            trust_remote_code=True,
+            revision=revision
+        )
+
+        # Add special tokens if necessary
+        #special_tokens_dict = {'additional_special_tokens': ['<special1>', '<special2>']}
+        #num_added_toks = tokenizer.add_special_tokens(special_tokens_dict)
+
+        # Load and compress the model
+        model, tokenizer = load_compress_model(
+            model_path,
+            device=device,
+            torch_dtype=torch_dtype,
+            use_fast=use_fast,
+            revision=revision
+        )
+
+        # Resize the model embeddings to match the tokenizer
+        model.resize_token_embeddings(32000)
+
+        # Ensure the eos and pad tokens are correctly set
         model.config.eos_token_id = tokenizer.eos_token_id
         model.config.pad_token_id = tokenizer.pad_token_id
+
         return model, tokenizer
 
     def get_default_conv_template(self, model_path: str) -> Conversation:
-        return get_conv_template("one_shot_medical")
+        return get_conv_template("one_shot")
+
+
+
+
 
 
 
@@ -1919,8 +1950,8 @@ register_model_adapter(ZephyrAdapter)
 register_model_adapter(XwinLMAdapter)
 register_model_adapter(LemurAdapter)
 register_model_adapter(PygmalionAdapter)
+# Ensure the adapter is registered correctly
 register_model_adapter(MeditronAdapter)
-
 
 # After all adapters, try the default base adapter.
 register_model_adapter(BaseModelAdapter)

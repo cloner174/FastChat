@@ -76,7 +76,7 @@ class ModelWorker(BaseModelWorker):
         logger.info(f"Loading the model {self.model_names} on worker {worker_id} ...")
         self.model, self.tokenizer = load_model(
             model_path,
-            device=device,
+            device='cpu',
             num_gpus=num_gpus,
             max_gpu_memory=max_gpu_memory,
             dtype=dtype,
@@ -346,7 +346,7 @@ def create_model_worker():
         args.model_names,
         args.limit_worker_concurrency,
         no_register=args.no_register,
-        device=args.device,
+        device='cpu',
         num_gpus=args.num_gpus,
         max_gpu_memory=args.max_gpu_memory,
         dtype=str_to_torch_dtype(args.dtype),

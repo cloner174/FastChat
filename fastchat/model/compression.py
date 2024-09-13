@@ -115,7 +115,7 @@ def load_compress_model(model_path, device, torch_dtype, use_fast, revision="mai
         )
     except TypeError:
         tokenizer = AutoTokenizer.from_pretrained(
-            model_path, use_fast=~use_fast, revision=revision, trust_remote_code=True
+            model_path, use_fast=not use_fast, revision=revision, trust_remote_code=True
         )
     with init_empty_weights():
         # `trust_remote_code` should be set as `True` for both AutoConfig and AutoModel
@@ -123,7 +123,7 @@ def load_compress_model(model_path, device, torch_dtype, use_fast, revision="mai
             model_path,
             low_cpu_mem_usage=True,
             torch_dtype=torch_dtype,
-            trust_remote_code=True,
+            #trust_remote_code=True,
             revision=revision,
         )
         # some models are loaded by AutoModel but not AutoModelForCausalLM,
@@ -132,13 +132,16 @@ def load_compress_model(model_path, device, torch_dtype, use_fast, revision="mai
             # google/flan-* models are based on an AutoModelForSeq2SeqLM.
             if "T5Config" in str(type(config)):
                 model = AutoModelForSeq2SeqLM.from_config(
-                    config, trust_remote_code=True
+                    config
                 )
             else:
-                model = AutoModelForCausalLM.from_config(config, trust_remote_code=True)
+                model = AutoModelForCausalLM.from_config(config)
         except NameError:
-            model = AutoModel.from_config(config, trust_remote_code=True)
+            model = AutoModel.from_config(config)
         linear_weights = get_compressed_list(model)
+    
+    model.resize_token_embeddings(32000)
+    
     if os.path.exists(model_path):
         # `model_path` is a local folder
         base_pattern = os.path.join(model_path, "pytorch_model*.bin")
@@ -178,7 +181,6 @@ def load_compress_model(model_path, device, torch_dtype, use_fast, revision="mai
             f"Cannot find any model weight files. "
             f"Please check your (cached) weight path: {model_path}"
         )
-
     compressed_state_dict = {}
     if use_safetensors:
         from safetensors.torch import load_file
@@ -209,12 +211,16 @@ def load_compress_model(model_path, device, torch_dtype, use_fast, revision="mai
                 torch.npu.empty_cache()
 
     for name in model.state_dict():
-        if name not in linear_weights:
+      if name not in linear_weights:
+        if name in compressed_state_dict:
+            #print(name)
+            #print(len(compressed_state_dict[name]))
             set_module_tensor_to_device(
                 model, name, device, value=compressed_state_dict[name]
             )
-    apply_compressed_weight(model, compressed_state_dict, device)
-
+        else:
+            print(f"Warning: {name} not found in compressed_state_dict")
+    
     if torch_dtype == torch.float16:
         model.half()
     model.to(device)
